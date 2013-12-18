@@ -10,6 +10,7 @@ from tempfile import mkdtemp
 
 extentionByFormat = {
     "JPEG":".jpeg",
+    "JPG":".jpg",
     "WEBP":".webp",
     "PNG":".png"
 }
@@ -22,7 +23,7 @@ def getFileList(path):
 
     itemList = os.listdir(path)
     for item in itemList:
-        currentFile = '%s%s' % (path,item)
+        currentFile = '%s/%s' % (path,item)
         if os.path.isfile(currentFile) and os.path.splitext(item)[1][1:] in patoolib.ArchiveFormats:
             fileList.append(currentFile)
 
@@ -36,6 +37,7 @@ def unpackArchive(path):
 
 def convertArchive(path="./",imageFormat="JPEG", resize=None):
     workingDirectoryList = []
+
     #os.fchdir()
     for archivePath in getFileList(path):
         try:
@@ -54,16 +56,18 @@ def convertArchive(path="./",imageFormat="JPEG", resize=None):
             files.sort()
             for f in files:
                 filePath = '%s/%s' % (workingDir,f)
-                print(filePath)
+                
+                extention = os.path.splitext(f)[1]
+                extention = extention.lower()
 
-                if not os.path.isdir(filePath) and os.path.splitext(f)[1] in extentionByFormat.values():
+                if not os.path.isdir(filePath) and extention in extentionByFormat.values():
                     futurFileName = '%s%s' % (os.path.splitext(f)[0],extentionByFormat[imageFormat])
 
                     #convert and resize
                     im = Image.open(filePath).convert("RGB")
 
                     if resize[0]:
-                        im.thumbnail((resize[0],resize[1]), Image.ANTIALIAS)
+                        im.thumbnail((int(resize[0]),int(resize[1])), Image.ANTIALIAS)
 
                     #put in tmpfile
                     tmpFile = BytesIO()
@@ -76,7 +80,9 @@ def convertArchive(path="./",imageFormat="JPEG", resize=None):
                     #info.type = "WEBP"
                     tarFile.addfile(info,tmpFile)
                     tmpFile.close()
-        print("file %s compressed" % name)
+                    print("file %s compressed" % futurFileName)
+                else:
+                    print("file NOT %s compressed" % name)
 
         #bz2
         '''
