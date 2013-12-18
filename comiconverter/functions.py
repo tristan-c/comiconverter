@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, sys, tarfile, bz2
+import os, sys, tarfile, bz2, shutil
 from io import BytesIO 
 from PIL import Image
 from shutil import copyfileobj
@@ -83,6 +83,8 @@ def convertArchive(path="./",imageFormat="JPEG", resize=None):
                     print("file %s compressed" % futurFileName)
                 else:
                     print("file NOT %s compressed" % name)
+
+        shutil.rmtree(workingDir)
 
         #bz2
         '''
