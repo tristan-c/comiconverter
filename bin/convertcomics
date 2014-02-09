@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+"""Usage: comiconverter.py [-h] [--png | --webp] [--resize=<resolution>] [DIR]
+
+Process One or more image archives in a directory by converting/resizing images and reack them in tar format. Patool is used for extracting archives, compatibility depends on system installed software (unrar...)
+
+Arguments:
+    DIR     specified one dir where all files will be process     
+
+Options:
+    -h --help    show this
+    --png       convert in png (default is jpeg)
+    --webp      convert in webp format (only if your version of python-pillow support it)
+    --resize=<resolution>    resize the image (keep ratio aspect) ex:  800x600
+
+"""
+# try:
+import comiconverter.functions
+# except Exception as e:
+#     print(e)
+#     from ..comiconverter import comiconverter
+from docopt import docopt
+from os.path import isdir
+
+if __name__ == '__main__':
+    arguments = docopt(__doc__)
+
+    x,y = None,None
+
+    if arguments['--resize'] and 'x' in arguments['--resize']:
+        x,y = arguments['--resize'].split('x')
+
+    imageFormat = 'JPEG'
+
+    if arguments['--png']:
+        imageFormat = 'PNG'
+    if arguments['--webp']:
+        imageFormat = 'WEBP'
+
+    if isdir(arguments['DIR']):
+        comiconverter.functions.convertArchive(path=arguments['DIR'],imageFormat=imageFormat,resize=(x,y))
+    else:
+        print("Specified directory isn't a directory")
