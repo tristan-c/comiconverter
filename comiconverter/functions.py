@@ -19,7 +19,7 @@ def filenameFromPath(path):
     return os.path.splitext(os.path.basename(path))[0]
 
 def getExtention(fileName):
-    return os.path.splitext(f)[1].lower()
+    return os.path.splitext(fileName)[1].lower()
 
 def getFileList(path):
     fileList = []
@@ -38,62 +38,72 @@ def unpackArchive(path):
     patoolib.extract_archive(path,outdir=tmpDir)
     return tmpDir
 
-def convertFile(origin,format,resize):
+def convertFile(origin,imageFormat,resize):
     try:
-        if getExtention(origin) in extentionByFormat.values():
-            im = Image.open(filePath).convert("RGB")
+        im = Image.open(origin).convert("RGB")
 
-            if resize[0]:
-                im.thumbnail((int(resize[0]),int(resize[1])), Image.ANTIALIAS)
+        if resize[0]:
+            im.thumbnail((int(resize[0]),int(resize[1])), Image.ANTIALIAS)
 
-            tmpFile = BytesIO()
-            im.save(tmpFile, imageFormat, quality=85)
-            tmpFile.seek(0)
+        tmpFile = BytesIO()
+        im.save(tmpFile, imageFormat, quality=85)
+        tmpFile.seek(0)
 
-            return tmpFile
+        return tmpFile
     except Exception as e:
         print("---- error occured while converting: %s" % origin)
+        print("------ %s" % e)
         return None
 
 
 def convertArchive(workingDir, destFile, imageFormat="JPEG", resize=None):
-    print("--- converting to %s %s: %s" % (imageFormat, resize, destFile)
+    print("--- converting to %s %s: %s" % (imageFormat, resize, destFile))
 
     with tarfile.open(destFile, "w") as tarFile:
-        for dirName, subdirList, fileList in os.walk(path):
+        for dirName, subdirList, fileList in os.walk(workingDir):
             for fileName in fileList:
 
-                filePath = "%s%s" % (dirName,fileName)
-                futurFileName = fileName.replace(workingDir,"")
+                filePath = os.path.join(dirName,fileName)
 
-                print("---- converting %s" % filePath)
-                print("---- to %s" % futurFileName)
+                futurFileName = '%s%s' % (os.path.splitext(fileName)[0],extentionByFormat[imageFormat])
 
-                tmpFile = convertFile(filePath,imageFormat,resize)
+                if getExtention(fileName) in extentionByFormat.values():
+                    #print("---- converting %s" % filePath)
+                    print("---- to %s" % futurFileName)
 
-                if tmpFile:
-                    info = tarfile.TarInfo(futurFileName)
-                    info.size = len(tmpFile.getbuffer())
-                    tarFile.addfile(info,tmpFile)
-                    tmpFile.close()
-                    print("---- %s converted" % futurFileName)
+                    tmpFile = convertFile(filePath,imageFormat,resize)
+
+                    if tmpFile:
+
+                        if dirName != workingDir:
+                            subdirectory = dirName.replace(workingDir+"/","")
+                            futurFileName = "%s/%s" % (subdirectory,futurFileName)
+
+                        info = tarfile.TarInfo(futurFileName)
+                        info.size = len(tmpFile.getbuffer())
+                        tarFile.addfile(info,tmpFile)
+                        tmpFile.close()
+                        #print("------ %s converted" % futurFileName)
 
 
 
 def launch(path="./",imageFormat="JPEG", resize=None):
-
+    root_dir = os.getcwd()
     for dirName, subdirList, fileList in os.walk(path):
         print("working in: %s" % dirName)
 
         for fileName in fileList:
-            print("-- Unpacking: %s" % fileName)
-            filePath = "%s%s" % (dirName,fileName)
-            unpackedArchive = unpackArchive(filePath)
+            if getExtention(fileName).replace(".","") in patoolib.ArchiveFormats:
+                print("- Unpacking: %s" % fileName)
+                filePath = os.path.join(root_dir,dirName,fileName)
+                unpackedArchive = unpackArchive(filePath)
 
-            newTarFileName = "%s.tar" % os.path.splitext(filePath)
-            convertArchive(unpackedArchive,newTarFileName, imageFormat, resize=None)
-            shutil.rmtree(unpackedArchive)
-            print("-- Finished: %s" % newTarFileName)
+                newTarFileName = "%s.tar" % os.path.splitext(filePath)[0]
+                convertArchive(unpackedArchive,newTarFileName, imageFormat, resize)
+                shutil.rmtree(unpackedArchive)
+                print("- Finished: %s" % newTarFileName)
+            else:
+                print("%s is not a supported archive" % fileName)
 
 
 
