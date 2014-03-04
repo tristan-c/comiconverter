@@ -37,6 +37,6 @@ if __name__ == '__main__':
         imageFormat = 'WEBP'
 
     if isdir(arguments['DIR']):
-        comiconverter.functions.convertArchive(path=arguments['DIR'],imageFormat=imageFormat,resize=(x,y))
+        comiconverter.functions.launch(path=arguments['DIR'],imageFormat=imageFormat,resize=(x,y))
     else:
         print("Specified directory isn't a directory")
