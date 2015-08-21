@@ -7,7 +7,7 @@ setup(
     author='Tristan Carranante',
     author_email='tristan@carranante.name',
     packages=['comiconverter'],
-    scripts=['bin/convertcomics'],
+    scripts=['bin/comiconverter'],
     url='http://',
     license='LICENSE',
     description='',

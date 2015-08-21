@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 
 import os, sys, tarfile, bz2, shutil
+import logging
 from io import BytesIO 
 from PIL import Image
 from shutil import copyfileobj
 import patoolib
 from tempfile import mkdtemp
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 extentionByFormat = {
     "JPEG":".jpeg",
@@ -15,30 +20,64 @@ extentionByFormat = {
     "PNG":".png"
 }
 
-def filenameFromPath(path):
+
+def filename_from_path(path):
     return os.path.splitext(os.path.basename(path))[0]
 
-def getExtention(fileName):
-    return os.path.splitext(fileName)[1].lower()
+def get_extention(file_name):
+    return os.path.splitext(file_name)[1].lower()
 
-def getFileList(path):
-    fileList = []
+def unpack_archive(path):
+    tmp_dir = mkdtemp()
+    patoolib.extract_archive(path,verbosity=-1,outdir=tmp_dir)
+    return tmp_dir
 
-    itemList = os.listdir(path)
-    for item in itemList:
-        currentFile = '%s/%s' % (path,item)
-        if os.path.isfile(currentFile) and os.path.splitext(item)[1][1:] in patoolib.ArchiveFormats:
-            fileList.append(currentFile)
+class DisplayManager():
+    def __init__(self):
+        self.terminal_size = 30
+        try:
+            self.terminal_size = int(os.popen('stty size', 'r').read().split()[1])
+        except:
+            pass
 
-    fileList.sort()
-    return fileList
+        self.bar_length = 20
 
-def unpackArchive(path):
-    tmpDir = mkdtemp()
-    patoolib.extract_archive(path,outdir=tmpDir)
-    return tmpDir
+        self.job_title = None
+        self.current_steps = [0,0]
 
-def convertFile(origin,imageFormat,resize):
+        self.block = False
+
+    def new_job(self,title,number_of_step):
+        self.job_title = title
+        self.current_steps = [0,number_of_step]
+        self.diplay_job()
+
+    def update_job(self,step=1):
+        self.current_steps[0] += 1
+        self.diplay_job()
+
+    def diplay_job(self):
+        if not self.block:
+            _str = "" #string to display
+
+            if len(self.job_title) > self.terminal_size:
+                _str = self.job_title[0:self.terminal_size]
+            elif len(self.job_title) + 3 + self.bar_length <= self.terminal_size:
+                value = self.current_steps[0] * self.bar_length / self.current_steps[1]
+                loading_string = "#" * int(value)
+                while len(loading_string) < self.bar_length:
+                    loading_string += "-"
+                _str = "%s [%s]" % (self.job_title,loading_string)
+            else:
+                _str = "%s [%i/%i]" % (self.job_title,self.current_steps[0],self.current_steps[1])
+
+            if(self.current_steps[0] == self.current_steps[1]):
+                print(_str)
+            else:
+                print(_str,end='\r')
+        
+
+def convert_file(origin,image_format,resize,futur_file_name,tar_destination):
     try:
         im = Image.open(origin).convert("RGB")
 
@@ -46,78 +85,112 @@ def convertFile(origin,imageFormat,resize):
             im.thumbnail((int(resize[0]),int(resize[1])), Image.ANTIALIAS)
 
         tmpFile = BytesIO()
-        im.save(tmpFile, imageFormat, quality=85)
+        im.save(tmpFile, image_format, quality=85)
         tmpFile.seek(0)
 
-        return tmpFile
+        info = tarfile.TarInfo(futur_file_name)
+        info.size = len(tmpFile.getbuffer())
+        with tar_archive_lock:
+            tar_destination.addfile(info,tmpFile)
+        tmpFile.close()
+
     except Exception as e:
-        print("---- error occured while converting: %s" % origin)
-        print("------ %s" % e)
-        return None
+        logger.info("---- error occured while converting: %s" % origin)
+        logger.info("------ %s" % e)
+
+diplay_manager = DisplayManager()
+tar_archive_lock = Lock()
+
+def convert_archive(working_directory, new_file_path, image_format="JPEG", resize=None):
+    #logger.info("--- converting to %s %s" % (image_format, resize))
+
+    with tarfile.open(new_file_path, "w") as tar_file:
+
+        threadPool = []
+        file_to_process = []
+
+        #search all files in the extracted directory
+        for dir_name, dir_list, file_list in os.walk(working_directory):
+            for fileName in file_list:
+                #if the file is exploitable we push it in list
+                if get_extention(fileName) in extentionByFormat.values():
+                    file_to_process.append(os.path.join(dir_name,fileName))
+
+        #we convert every file
+        diplay_manager.new_job(os.path.basename(new_file_path),len(file_to_process))
+        executor =  ThreadPoolExecutor(max_workers=5)
+        futures = []
+
+        for image_path in file_to_process:
+            new_file_name = '%s%s' % (os.path.splitext(image_path)[0],extentionByFormat[image_format])
+
+            task = executor.submit(convert_file,image_path,image_format,resize,new_file_name,tar_file)
+            task.add_done_callback(diplay_manager.update_job)
+            futures.append(task)
+
+        try:
+            executor.shutdown(wait=True)
+        except KeyboardInterrupt:
+            print("Warning, program stopped, archive incomplete")
+            for future in futures:
+                future.cancel()
+            DisplayManager.block = True
+            #we waiting thread to finish
+            executor.shutdown(wait=True)
+            sys.exit()
 
 
-def convertArchive(workingDir, destFile, imageFormat="JPEG", resize=None):
-    print("--- converting to %s %s: %s" % (imageFormat, resize, destFile))
-
-    with tarfile.open(destFile, "w") as tarFile:
-        for dirName, subdirList, fileList in os.walk(workingDir):
-            for fileName in fileList:
-
-                filePath = os.path.join(dirName,fileName)
-
-                futurFileName = '%s%s' % (os.path.splitext(fileName)[0],extentionByFormat[imageFormat])
-
-                if getExtention(fileName) in extentionByFormat.values():
-                    #print("---- converting %s" % filePath)
-                    print("---- to %s" % futurFileName)
-
-                    tmpFile = convertFile(filePath,imageFormat,resize)
-
-                    if tmpFile:
-
-                        if dirName != workingDir:
-                            subdirectory = dirName.replace(workingDir+"/","")
-                            futurFileName = "%s/%s" % (subdirectory,futurFileName)
-
-                        info = tarfile.TarInfo(futurFileName)
-                        info.size = len(tmpFile.getbuffer())
-                        tarFile.addfile(info,tmpFile)
-                        tmpFile.close()
-                        #print("------ %s converted" % futurFileName)
-
-
-
-def launch(path="./",imageFormat="JPEG", resize=None):
+                        
+def launch(path="./",image_format="JPEG", resize=None):
     root_dir = os.getcwd()
-    for dirName, subdirList, fileList in os.walk(path):
-        print("working in: %s" % dirName)
 
-        for fileName in fileList:
-            if getExtention(fileName).replace(".","") in patoolib.ArchiveFormats:
-                print("- Unpacking: %s" % fileName)
-                filePath = os.path.join(root_dir,dirName,fileName)
-                unpackedArchive = unpackArchive(filePath)
+    files_to_process = []
 
-                newTarFileName = "%s.tar" % os.path.splitext(filePath)[0]
-                convertArchive(unpackedArchive,newTarFileName, imageFormat, resize)
-                shutil.rmtree(unpackedArchive)
-                print("- Finished: %s" % newTarFileName)
-            else:
-                print("%s is not a supported archive" % fileName)
+    #we walk directory topdown
+    for dir_name, dir_list, file_list in os.walk(path):
+        for file_name in file_list:
+            #we check if each file is supported
+            if get_extention(file_name).replace(".","") in patoolib.ArchiveFormats:
+                #we rebuild the filename path
+                files_to_process.append("%s/%s" % (dir_name,file_name))
+
+    for archive_path in files_to_process:
+        logger.info("- Unpacking: %s" % archive_path)
+        file_path = os.path.join(root_dir,archive_path)
+
+        #unpacking archive
+        unpacked_archive_path = unpack_archive(file_path)
+        new_file_path = "%s.tar" % os.path.splitext(file_path)[0]
+
+        convert_archive(unpacked_archive_path,new_file_path, image_format, resize)
+
+        #we clean unpacked directory
+        shutil.rmtree(unpacked_archive_path)
+        logger.info("- Finished: %s" % new_file_path)
 
 
+# def get_file_list(path):
+#     file_list = []
 
+#     itemList = os.listdir(path)
+#     for item in itemList:
+#         currentFile = '%s/%s' % (path,item)
+#         if os.path.isfile(currentFile) and os.path.splitext(item)[1][1:] in patoolib.ArchiveFormats:
+#             file_list.append(currentFile)
 
-# def convertArchive(path="./",imageFormat="JPEG", resize=None):
+#     file_list.sort()
+#     return file_list
+
+# def convert_archive(path="./",imageFormat="JPEG", resize=None):
 #     workingDirectoryList = []
 
 #     #os.fchdir()
-#     for archivePath in getFileList(path):
+#     for archivePath in get_file_list(path):
 #         try:
-#             unpackedPath = unpackArchive(archivePath)
-#             workingDirectoryList.append((filenameFromPath(archivePath),unpackedPath))
+#             unpackedPath = unpack_archive(archivePath)
+#             workingDirectoryList.append((filename_from_path(archivePath),unpackedPath))
 #         except Exception as err:
-#             print('%s : %s' % ('Error while unpacking archives',err))
+#             logger.info('%s : %s' % ('Error while unpacking archives',err))
 
 
 #     for workingDirInfo in workingDirectoryList:
@@ -153,9 +226,9 @@ def launch(path="./",imageFormat="JPEG", resize=None):
 #                     #info.type = "WEBP"
 #                     tarFile.addfile(info,tmpFile)
 #                     tmpFile.close()
-#                     print("file %s compressed" % futurFileName)
+#                     logger.info("file %s compressed" % futurFileName)
 #                 else:
-#                     print("file NOT %s compressed" % name)
+#                     logger.info("file NOT %s compressed" % name)
 
 #         shutil.rmtree(workingDir)
 

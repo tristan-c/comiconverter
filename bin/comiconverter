@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Usage: comiconverter.py [-h] [--png | --webp] [--resize=<resolution>] [DIR]
+"""Usage: comiconverter.py [-h] [-r] [--png | --webp] [--resize=<resolution>] [DIR]
 
 Process One or more image archives in a directory by converting/resizing images and reack them in tar format. Patool is used for extracting archives, compatibility depends on system installed software (unrar...)
 
@@ -7,10 +7,11 @@ Arguments:
     DIR     specified one dir where all files will be process     
 
 Options:
-    -h --help    show this
-    --png       convert in png (default is jpeg)
-    --webp      convert in webp format (only if your version of python-pillow support it)
-    --resize=<resolution>    resize the image (keep ratio aspect) ex:  800x600
+    -h --help               show this
+    --png                   convert in png (default is jpeg)
+    --webp                  convert in webp format (only if your version of python-pillow support it)
+    --resize=<resolution>   resize the image, always keeping ratio aspect [default: 1920x1080]
+    -r --recursive          walk through directory top-down
 
 """
 # try:
@@ -29,6 +30,7 @@ if __name__ == '__main__':
     if arguments['--resize'] and 'x' in arguments['--resize']:
         x,y = arguments['--resize'].split('x')
 
+
     imageFormat = 'JPEG'
 
     if arguments['--png']:
@@ -37,6 +39,6 @@ if __name__ == '__main__':
         imageFormat = 'WEBP'
 
     if isdir(arguments['DIR']):
-        comiconverter.functions.launch(path=arguments['DIR'],imageFormat=imageFormat,resize=(x,y))
+        comiconverter.functions.launch(path=arguments['DIR'],image_format=imageFormat,resize=(x,y))
     else:
         print("Specified directory isn't a directory")
