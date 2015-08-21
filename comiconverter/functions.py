@@ -10,7 +10,7 @@ from tempfile import mkdtemp
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 extentionByFormat = {
@@ -58,23 +58,40 @@ class DisplayManager():
 
     def diplay_job(self):
         if not self.block:
-            _str = "" #string to display
+            progress_line = "" #string to display
 
-            if len(self.job_title) > self.terminal_size:
-                _str = self.job_title[0:self.terminal_size]
-            elif len(self.job_title) + 3 + self.bar_length <= self.terminal_size:
-                value = self.current_steps[0] * self.bar_length / self.current_steps[1]
-                loading_string = "#" * int(value)
+            #compute loading bar length
+            if len(self.job_title) + 3 + self.bar_length <= self.terminal_size:
+                percent_progression = self.current_steps[0] * self.bar_length / self.current_steps[1]
+
+                #building loading string
+                loading_string = "#" * int(percent_progression)
                 while len(loading_string) < self.bar_length:
-                    loading_string += "-"
-                _str = "%s [%s]" % (self.job_title,loading_string)
-            else:
-                _str = "%s [%i/%i]" % (self.job_title,self.current_steps[0],self.current_steps[1])
+                    loading_string += " "
+                loading_string = "[%s]" % loading_string
 
-            if(self.current_steps[0] == self.current_steps[1]):
-                print(_str)
+                #build the whole line
+                white_spaces = " " * (self.terminal_size - (len(self.job_title) + len(loading_string)))
+                progress_line = "%s%s%s" % (self.job_title,white_spaces,loading_string)
             else:
-                print(_str,end='\r')
+                loading_string = " [%i/%i]" % (self.current_steps[0],self.current_steps[1])
+                if len(self.job_title) <= self.terminal_size:
+                    progress_line = self.job_title
+                else:
+                    progress_line = self.job_title[:self.terminal_size]
+
+                #fill with white space
+                while len(progress_line) < self.terminal_size:
+                    progress_line += " "
+
+                #add loading string to line
+                progress_line = progress_line[:len(progress_line) - len(loading_string)] + loading_string
+
+            #go back in terminal to rewrite the line
+            if(self.current_steps[0] == self.current_steps[1]):
+                print(progress_line)
+            else:
+                print(progress_line,end='\r')
         
 
 def convert_file(origin,image_format,resize,futur_file_name,tar_destination):
