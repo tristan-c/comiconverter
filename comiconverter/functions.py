@@ -161,7 +161,7 @@ def convert_archive(working_directory, new_file_path, image_format="JPEG", resiz
 
 
                         
-def launch(path="./",image_format="JPEG", resize=None):
+def launch(path="./",image_format="JPEG", resize=None, recursive=False):
     root_dir = os.getcwd()
 
     files_to_process = []
@@ -173,6 +173,8 @@ def launch(path="./",image_format="JPEG", resize=None):
             if get_extention(file_name).replace(".","") in patoolib.ArchiveFormats:
                 #we rebuild the filename path
                 files_to_process.append("%s/%s" % (dir_name,file_name))
+        if not recursive:
+            break
 
     for archive_path in files_to_process:
         logger.info("- Unpacking: %s" % archive_path)
