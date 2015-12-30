@@ -141,6 +141,9 @@ def convert_archive(working_directory, new_file_path, image_format="JPEG", resiz
         for image_path in file_to_process:
             new_file_name = '%s%s' % (os.path.splitext(image_path)[0],extentionByFormat[image_format])
 
+            #substract temp file path ex: /tmp/fesfene
+            new_file_name = new_file_name.replace("%s/" % working_directory,"")
+
             task = executor.submit(convert_file,image_path,image_format,resize,new_file_name,tar_file)
             task.add_done_callback(diplay_manager.update_job)
             futures.append(task)
