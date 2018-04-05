@@ -102,7 +102,7 @@ def convert_file(origin,image_format,resize,futur_file_name,tar_destination):
             im.thumbnail((int(resize[0]),int(resize[1])), Image.ANTIALIAS)
 
         tmpFile = BytesIO()
-        im.save(tmpFile, image_format, quality=85)
+        im.save(tmpFile, image_format, quality=90)
         tmpFile.seek(0)
 
         info = tarfile.TarInfo(futur_file_name)

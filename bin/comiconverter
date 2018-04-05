@@ -12,7 +12,7 @@ Options:
     -h --help               show this
     --png                   convert in png (default is jpeg)
     --webp                  convert in webp format (only if your version of python-pillow support it)
-    --resize=<resolution>   resize the image, always keeping ratio aspect [default: 1920x1080]
+    --resize=<resolution>   resize the image, always keeping ratio aspect [default: 1920x1920]
 """
 
 import comiconverter.functions
